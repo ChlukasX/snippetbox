@@ -43,7 +43,7 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
   fmt.Fprintf(w, "Display a specific snippet with ID %d", id)
 }
 
-func (app *application) snipperCreate(w http.ResponseWriter, r *http.Request) {
+func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
   if r.Method != http.MethodPost {
     w.Header().Set("Allow", http.MethodPost)
     app.clientError(w, http.StatusMethodNotAllowed)
