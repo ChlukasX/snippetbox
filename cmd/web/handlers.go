@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+  "strings"
+  "unicode/utf8"
 
 	"snippetbox.chlukas.github/internal/models"
 
-  "github.com/julienschmidt/httprouter" 
+	"github.com/julienschmidt/httprouter"
 )
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
@@ -50,16 +52,63 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
-  w.Write([]byte("Display the form for creating a new snippet..."))
+  data := app.newTemplateData(r)
+  data.Form = snippetCreateForm{
+    Expires: 365,
+  }
+
+  app.render(w, http.StatusOK, "create.tmpl.html", data)
+}
+
+type snippetCreateForm struct {
+  Title string
+  Content string
+  Expires int
+  FieldErrors map[string]string
 }
 
 func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request) {
+  err := r.ParseForm()
+  if err != nil {
+    app.clientError(w, http.StatusBadRequest)
+    return
+  }
 
-  title := "0 snail"
-  content := "O snail\nClimb Mount Fuji,\nBut slowly, slowly!\n\n– Kobayashi Issa"
-  expires := 7
+  expires, err := strconv.Atoi(r.PostForm.Get("expires"))
+  if err != nil {
+    app.clientError(w, http.StatusBadRequest)
+    return
+  }
 
-  id, err := app.snippets.Insert(title, content, expires)
+  form := snippetCreateForm{
+    Title: r.PostForm.Get("title"),
+    Content: r.PostForm.Get("content"),
+    Expires: expires,
+    FieldErrors: map[string]string{},
+  }
+
+  if strings.TrimSpace(form.Title) == "" {
+    form.FieldErrors["title"] = "this field cannot be blank"
+  } else if utf8.RuneCountInString(form.Title) > 100 {
+    form.FieldErrors["title"] = "this field cannot be more than 100 characters long"
+  }
+
+  if strings.TrimSpace(form.Content) == "" {
+    form.FieldErrors["content"] = "this field cannot be blank"
+  }
+
+  if form.Expires != 1 && expires != 7 && expires != 365 {
+    form.FieldErrors["expires"] = "This field must equal 1, 7 or 365"
+  }
+
+  if len(form.FieldErrors) > 0 {
+    data := app.newTemplateData(r)
+    data.Form = form
+    app.render(w, http.StatusUnprocessableEntity, "create.tmpl.html", data)
+    return
+  }
+
+  id, err := app.snippets.Insert(form.Title, form.Content, form.Expires)
   if err != nil {
     app.serverError(w, err)
     return
